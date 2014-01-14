@@ -11,13 +11,14 @@ from arcpy import env
 from arcpy.sa import *
 
 # Set environment settings
-env.workspace = "C:/sapyexamples/data"
+env.workspace = "E:/sapyexamples/data"
 
 # Set local variables
-inRasters = ["elevation",
-             "costraster"]
-locations = "observers.shp"
-outTable = "c:/sapyexamples/output/samptable02"
+inRasters = ["nlcd_", "nlcd_co", "USLE_3", "USLE_1"
+             "LS_Eq2"]
+locations = "nlcd_co"
+#Sample by New Landuse Categories
+outTable = "E:/sapyexamples/output/samptable01"
 sampMethod = "NEAREST"
 
 # Check out the ArcGIS Spatial Analyst extension license
