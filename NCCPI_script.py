@@ -1,6 +1,11 @@
 """Create fields in FC table for unique values in raster
 Then determine area weighted raster coverage for each field
 """
+import arcpy
+import decimal
+from arcpy import da
+from decimal import *
+
 ###FUNCTIONS###
 """Unique Values
 Purpose: returns a sorted list of unique values"""
@@ -40,7 +45,7 @@ Purpose: """
 #Example: lst_to_field(featureClass, "fieldName", lst)
 def lst_to_field(table, field, lst): #handle empty list
     if len(lst) ==0:
-        message("No values to add to '{}'.".format(field))
+        print("No values to add to '{}'.".format(field))
     else:
         i=0
         with arcpy.da.UpdateCursor(table, [field]) as cursor:
@@ -57,7 +62,7 @@ def checkSpatialReference(alphaFC, otherFC):
     otherSR = arcpy.Describe(otherFC).spatialReference
     if alphaSR.name != otherSR.name:
         #e.g. .name = u'WGS_1984_UTM_Zone_19N' for Projected Coordinate System = WGS_1984_UTM_Zone_19N
-        message("Spatial reference for " + otherFC + " does not match.")
+        print("Spatial reference for " + otherFC + " does not match.")
         try:
             path = os.path.dirname(alphaFC)
             ext = arcpy.Describe(alphaFC).extension
@@ -65,9 +70,9 @@ def checkSpatialReference(alphaFC, otherFC):
             output = path + os.sep + os.path.splitext(newName)[0] + "_prj" + ext
             arcpy.Project_management(otherFC, output, alphaSR)
             fc = output
-            message("File was re-projected and saved as " + fc)
+            print("File was re-projected and saved as " + fc)
         except:
-            message("Warning: spatial reference could not be updated.")
+            print("Warning: spatial reference could not be updated.")
             fc = otherFC
     else:
         fc = otherFC
@@ -113,7 +118,7 @@ for val in field_lst:
     arcpy.AddField_management(outTbl, name, "DOUBLE")
     #select polyRast with that value
     arcpy.MakeFeatureLayer_management(polyRast, "polyRast")
-    whereClause = "gridcode = '" + val + "'"
+    whereClause = "gridcode = '" + str(val) + "'"
     arcpy.SelectLayerByAttribute_management("polyRast", "NEW_SELECTION", whereClause)
     #get percent areas
     val_lst = percent_cover("polyRast", outTbl)
