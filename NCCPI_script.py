@@ -48,6 +48,31 @@ def lst_to_field(table, field, lst): #handle empty list
                 row[0] = lst[i]
                 i+=1
                 cursor.updateRow(row)
+
+"""Check Spatial Reference
+Purpose: checks that a second spatial reference matches the first and re-projects if not."""
+#Function Notes: Either the original FC or the re-projected one is returned
+def checkSpatialReference(alphaFC, otherFC):
+    alphaSR = arcpy.Describe(alphaFC).spatialReference
+    otherSR = arcpy.Describe(otherFC).spatialReference
+    if alphaSR.name != otherSR.name:
+        #e.g. .name = u'WGS_1984_UTM_Zone_19N' for Projected Coordinate System = WGS_1984_UTM_Zone_19N
+        message("Spatial reference for " + otherFC + " does not match.")
+        try:
+            path = os.path.dirname(alphaFC)
+            ext = arcpy.Describe(alphaFC).extension
+            newName = os.path.basename(otherFC)
+            output = path + os.sep + os.path.splitext(newName)[0] + "_prj" + ext
+            arcpy.Project_management(otherFC, output, alphaSR)
+            fc = output
+            message("File was re-projected and saved as " + fc)
+        except:
+            message("Warning: spatial reference could not be updated.")
+            fc = otherFC
+    else:
+        fc = otherFC
+    return fc
+
 ########
 ##VARS##
 #inRaster with mukey
@@ -57,7 +82,7 @@ keyID = "MUKEY"
 #table with mukey & NCCPI valu
 valuTable = r"L:\Public\jbousqui\GED\GIS\SSURGO\gSSURGO\soils_GSSURGO_ri_3389290_01\soils\gssurgo_g_ri\gSSURGO_RI.gdb\valu1"
 #NCCPI field
-fields = ["pctearthmc"]
+fields = "pctearthmc"
 #FC table
 FC = "TIGER_FULL"
 #outputs
@@ -69,25 +94,28 @@ outTbl = r"L:\Public\jbousqui\GED\GIS\HWBI.gdb\results"
 ###Execute###
 #copy outTbl
 arcpy.CopyFeatures_management(FC, outTbl)
-#convert raster to polygon
-arcpy.RasterToPolygon_conversion(inRaster, polyRast, "NO_SIMPLIFY", keyID)
 
 #join NCCPI field
-arcpy.JoinField_management(polyRast, keyID, valuTable, keyID, fields)
+arcpy.JoinField_management("raster", keyID, valuTable, keyID)
+#make raster layer
+arcpy.MakeRasterLayer_management(inRaster, "raster")
+#convert raster to polygon
+arcpy.RasterToPolygon_conversion("raster", polyRast, "NO_SIMPLIFY", fields)
+
+#check spatial reference on polyRast
+polyRast = checkSpatialReference(outTbl, polyRast)
 
 #list possible values
-field_lst = unique_values(valuTable, fields[0])
+field_lst = unique_values(valuTable, fields)
 #create a field for each possible value
 for val in field_lst:
     name = "pctea_" + str(val)
     arcpy.AddField_management(outTbl, name, "DOUBLE")
     #select polyRast with that value
     arcpy.MakeFeatureLayer_management(polyRast, "polyRast")
-    whereClause = fields[0] + " = '" + val + "'"
+    whereClause = "gridcode = '" + val + "'"
     arcpy.SelectLayerByAttribute_management("polyRast", "NEW_SELECTION", whereClause)
     #get percent areas
     val_lst = percent_cover("polyRast", outTbl)
     #add to table
     lst_to_field(outTbl, name, val_lst)
-    
-#arcpy.RasterToPolygon_conversion(in_raster="MapunitRaster_ri_10m", out_polygon_features="L://Public//jbousqui//GED//GIS//HWBI.gdb/polyRast", simplify="NO_SIMPLIFY", raster_field="Valu1.pctearthmc")
