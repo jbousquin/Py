@@ -22,7 +22,7 @@ def percent_cover(poly, bufPoly):
     lst=[]
     orderLst=[]
     #add handle for when no overlap?
-    with arcpy.da.SearchCursor(bufPoly, ["SHAPE@", "ORIG_FID"]) as cursor:
+    with arcpy.da.SearchCursor(bufPoly, ["SHAPE@", "OID@"]) as cursor:
         for row in cursor:
             totalArea = Decimal(row[0].getArea("PLANAR", "SQUAREMETERS"))
             arcpy.SelectLayerByLocation_management("polyLyr", "INTERSECT", row[0])
@@ -118,7 +118,7 @@ for val in field_lst:
     arcpy.AddField_management(outTbl, name, "DOUBLE")
     #select polyRast with that value
     arcpy.MakeFeatureLayer_management(polyRast, "polyRast")
-    whereClause = "gridcode = '" + str(val) + "'"
+    whereClause = "gridcode = " + str(val)
     arcpy.SelectLayerByAttribute_management("polyRast", "NEW_SELECTION", whereClause)
     #get percent areas
     val_lst = percent_cover("polyRast", outTbl)
