@@ -81,20 +81,20 @@ def checkSpatialReference(alphaFC, otherFC):
 ########
 ##VARS##
 #inFC with mukey
-inFC = r"L:\Public\jbousqui\GED\GIS\SSURGO\SSURGO_Batch\soilmu_State.gdb\soil_mu_a_al"
+inFC = r"C:\ArcGIS\Local_GIS\HWBI\SSURGO\soilmu_State.gdb\soil_mu_a_al"
 #mukey
 keyID = "MUKEY"
 #table with mukey & NCCPI valu
-valuTable = r"L:\Public\jbousqui\GED\GIS\SSURGO\gSSURGO\soils_GSSURGO_ri_3389290_01\soils\gssurgo_g_ri\gSSURGO_RI.gdb\valu1"
+valuTable = r"C:\ArcGIS\Local_GIS\HWBI\SSURGO\gSSURGO_RI.gdb\valu1"
 #table with mukey & farmland designation
-farmTable = r"L:\Public\jbousqui\GED\GIS\SSURGO\gSSURGO\soils_GSSURGO_ri_3389290_01\soils\gssurgo_g_ri\gSSURGO_RI.gdb\mapunit"
+farmTable = r"C:\ArcGIS\Local_GIS\HWBI\SSURGO\gSSURGO_RI.gdb\mapunit"
 #NCCPI field in valuTable
 fields = "pctearthmc"
 #fields = ["pctearthmc","farmlndcl"]
 #FC table
-FC = r"L:\Public\jbousqui\GED\GIS\HWBI.gdb\TIGER_FULL"
+FC = r"C:\ArcGIS\Local_GIS\HWBI\HWBI.gdb\TIGER_FULL"
 #output
-outTbl = r"L:\Public\jbousqui\GED\GIS\HWBI.gdb\results_all"
+outTbl = r"C:\ArcGIS\Local_GIS\HWBI\HWBI.gdb\results_all"
 
 ###Execute###
 #check FC reference is the same as soil survey
