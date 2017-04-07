@@ -81,7 +81,7 @@ def checkSpatialReference(alphaFC, otherFC):
 ########
 ##VARS##
 #inFC with mukey
-inFC = r"C:\ArcGIS\Local_GIS\HWBI\SSURGO\soilmu_State.gdb\soil_mu_a_al"
+inFC = r"C:\ArcGIS\Local_GIS\HWBI\SSURGO\soilmu_State.gdb\soil_mu_a_US"
 #mukey
 keyID = "MUKEY"
 #table with mukey & NCCPI valu
@@ -94,7 +94,7 @@ fields = "pctearthmc"
 #FC table
 FC = r"C:\ArcGIS\Local_GIS\HWBI\HWBI.gdb\TIGER_FULL"
 #output
-outTbl = r"C:\ArcGIS\Local_GIS\HWBI\HWBI.gdb\results_all"
+outTbl = r"C:\ArcGIS\Local_GIS\HWBI\HWBI.gdb\results_all_3"
 
 ###Execute###
 #check FC reference is the same as soil survey
@@ -107,20 +107,27 @@ arcpy.CopyFeatures_management(FC, outTbl)
 arcpy.JoinField_management(inFC, keyID, valuTable, keyID, fields)
 #arcpy.JoinField_management(inFC, keyID, farmTable, keyID, fields)
 
-arcpy.MakeFeatureLayer_management(inFC, "lyr")
+#arcpy.MakeFeatureLayer_management(inFC, "lyr")
 
+#list states
+state_lst = unique_values(outTbl, "STATEFP10")
 #list possible values
 #for field in fields:
 field_lst = unique_values(valuTable, fields)
-#create a field for each possible value
-for val in field_lst:
-    name = "pctea_" + str(val)
-    arcpy.AddField_management(outTbl, name, "DOUBLE")
-    #select poly soil with that value
-    #arcpy.MakeFeatureLayer_management(inFC, "lyr")
-    whereClause = str(fields) + " = " + str(val)
-    arcpy.SelectLayerByAttribute_management("lyr", "NEW_SELECTION", whereClause)
-    #get percent areas
-    val_lst = percent_cover("lyr", outTbl)
-    #add to table
-    lst_to_field(outTbl, name, val_lst)
+#for each state
+for state in state_lst:
+    print("Starting on  " + state)
+    clause =  "STATEFP10 = " + str(state)
+    arcpy.MakeFeatureLayer_management(inFC, "lyr", )
+    #create a field for each possible value
+    for val in field_lst:
+        name = "pctea_" + str(val)
+        arcpy.AddField_management(outTbl, name, "DOUBLE")
+        #select poly soil with that value
+        #arcpy.MakeFeatureLayer_management(inFC, "lyr")
+        whereClause = str(fields) + " = " + str(val)
+        arcpy.SelectLayerByAttribute_management("lyr", "NEW_SELECTION", whereClause)
+        #get percent areas
+        val_lst = percent_cover("lyr", outTbl)
+        #add to table
+        lst_to_field(outTbl, name, val_lst)
