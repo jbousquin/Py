@@ -32,19 +32,23 @@ for item in os.listdir(dir_name):
         zip_obj.close() #close file
         #delete original zip file
         #os.remove(file_name)
+        print("Unzipped " + file_name)
 
 #loop through each state
-for state in os.listdir(dir_name):
+for item in os.listdir(dir_name):
     #check that folder is a gdb
     if item.endswith(".gdb"):
         state_gdb = dir_name + os.sep + item
         #table with mukey & NCCPI valu
-        valuTable = state_gdb + "Valu1"
+        valuTable = state_gdb + os.sep + "Valu1"
         #table with mukey & farmland designation
-        farmTable = state_gdb + "mapunit"
+        farmTable = state_gdb + os.sep + "mapunit"
         #Join farm class to valu1 in state gdb
+        print("Adding farm class from " + farmTable + " to state valutable " + valuTable)
         arcpy.JoinField_management(valuTable, keyID, farmTable, keyID, ["farmlndcl"])
         #append joined table to master
+        print("Appending to " + master)
         arcpy.Append_management(valuTable, master, schema_type="NO_TEST")
         #delete state_gdb and contents
         shutil.rmtree(state_gdb)
+        print("Finished adding MUKEY's from " + item)
