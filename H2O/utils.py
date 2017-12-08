@@ -9,6 +9,7 @@ import os
 from urllib import urlretrieve, urlopen
 from shutil import copyfile
 from json import loads, load
+from math import ceil
 import zipfile
 import subprocess
 import arcpy
@@ -41,22 +42,101 @@ def geoQuery(geo, geoType, inSR, fields):
     geoType = "geometryType={}".format(geoType)
     inSR = "inSR={}".format(inSR)
     spRel = "spatialRel=esriSpatialRelIntersects"
-    limitGeo = "returnGeometry=false"
+    outGeo = "returnGeometry=false"
     outFields = "outFields="
     for f in fields:
         if f == "Geometry":
-            limitGeo = "returnGeometry=true"
+            outGeo = "returnGeometry=true"
         else:
-            outFields += "{},".format(f)    
-    return "{}&{}&{}&{}&{}&{}".format(geo, geoType, inSR, spRel, outFields, limitGeo)
+            outFields += "{},".format(f)
+    ret = "{}&{}".format(outFields, outGeo)
+    return "query?{}&{}&{}&{}&{}".format(geo, geoType, inSR, spRel, ret)
 
+
+def getServiceInfo(catalog, service):
+    #catalog = "enviroatlas.epa.gov"
+    #service = "Supplemental/Dasymetric_WMerc"
+    f = "f=pjson"
+    # Build request
+    r = "https://{}/arcgis/rest/services/{}/MapServer?{}".format(catalog, service, f)
+    # Send request
+    return loads(api_request(r))
+
+def rasterServiceDict(catalog, service):
+    sJSON = getServiceInfo(catalog, service)
+    maxImage = "{},{}".format(sJSON['maxImageWidth'], sJSON['maxImageHeight'])
+
+    e = sJSON["fullExtent"]
+    rasterExtent = "{},{},{},{}".format(e['xmin'],e['ymin'],e['ymax'],e['xmax'])
+    #SR = sJSON["spatialReference"]
+    return {"maxImage": maxImage, "rasterExtent": rasterExtent}
+
+def rasterPointQuery(geo, inSR, serviceDict):
+    #geometry=-9705448.14767,3587228.92735
+    geo = "geometry={}".format(geo)
+    inSR = "sr={}".format(inSR)
+    geoType = "geometryType=esriGeometryPoint"
+    tol = "tolerance=1"
+    #"mapExtent=-14246360.5296%2C2604051.01388,6737031.01388,-7264070.52956
+    ext = "mapExtent={}".format(serviceDict["rasterExtent"])
+    #"imageDisplay=4096,4096"
+    img = "imageDisplay={}".format(serviceDict["rasterExtent"])
+    ret = "returnGeometry=false"
+    #"&gdbVersion"
+
+    return "identify?{}&{}&{}&{}&{}&{}&{}".format(geo, geoType, inSR, tol, ext, img, ret)
+
+
+def queryPoints(catalog, service, AOI, cellx, celly):
+    #cellx and celly are min cell width and min cell height in meters
+    # Get Spatial Reference for AOI
+    inSR = getSR(AOI)
+    # Get bounding box for AOI
+    bBox = boundingBox(AOI)
+    # Get bounding Box points in correct format
+    bb_list = [float(a) for a in bBox.split(",")]
+    # Determine number of equidistant points
+    x_i = int(ceil((bb_list[2] - bb_list[0])/cellx))
+    y_i = int(ceil((bb_list[3] - bb_list[1])/celly))
+    points = []
+    # Start in left lower corner
+    startPnt = bb_list[0], bb_list[1]
+    for i in range(0, y_i):
+        # Increase y by celly x_i times
+        y = startPnt[1] + (i * celly)
+        for j in range(0, x_i):
+            # Increase x by cellx x_i times
+            x = startPnt[0] + (j * cellx)
+            points += [[x,y]]
+
+    # Get info needed for query
+    #catalog = "enviroatlas.epa.gov"
+    #service = "Supplemental/Dasymetric_WMerc"
+    serviceDict = rasterServiceDict(catalog, service)
+
+    # Get value at each point
+    pnt_values = []
+    for pnt in points:
+        #geo = "-9705448.14767,3587228.92735"
+        geo = "{},{}".format(pnt[0], pnt[1])      
+        query = rasterPointQuery(geo, inSR, serviceDict)
+        JSON_response = MapServerRequest(catalog, service, None, query)
+        pnt_values += JSON_response[u'results'][0]['attributes']['Pixel Value']
+
+    # Turn the pont values into a raster
+
+    # Snap/re-project to align with original?
 
 def MapServerRequest(catalog, service, layer, query):
     #catalog = "tigerweb.geo.census.gov"
     #service = "TIGERweb/tigerWMS_Census2010"
     #layer = 98
-    que = "query?{}&f=json".format(query)
-    r = "https://{}/arcgis/rest/services/{}/MapServer/{}/{}".format(catalog, service, layer, que)
+    if layer is None:
+        layer = ""
+    else:
+        layer = "{}/".format(layer)
+    que = "{}&f=json".format(query)
+    r = "https://{}/arcgis/rest/services/{}/MapServer/{}{}".format(catalog, service, layer, que)
     return loads(api_request(r))
 
 
