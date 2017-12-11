@@ -118,10 +118,10 @@ def queryPoints(catalog, service, AOI, cellx, celly):
     pnt_values = []
     for pnt in points:
         #geo = "-9705448.14767,3587228.92735"
-        geo = "{},{}".format(pnt[0], pnt[1])      
+        geo = "{},{}".format(pnt[0], pnt[1])
         query = rasterPointQuery(geo, inSR, serviceDict)
         JSON_response = MapServerRequest(catalog, service, None, query)
-        pnt_values += JSON_response[u'results'][0]['attributes']['Pixel Value']
+        pnt_values += [JSON_response[u'results'][0]['attributes']['Pixel Value']]
 
     # Turn the pont values into a raster
 
