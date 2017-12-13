@@ -13,27 +13,31 @@ from math import ceil
 import zipfile
 import subprocess
 import arcpy
+import errno
 
 def message(string):
     print(string)
 
 
-def HTTPS_download(request, directory, filename):
-    """Download HTTP request to filename
-    Param request: HTTP request link ending in "/"
-    Param directory: Directory where downloaded file will be saved
-    Param filename: Name of file for download request and saving
+def retry_urlopen(retries, *request):
+    """Tries urlopen(request) for specified number of retries if the URLError
+    was errno.WASCONNRESET
     """
+    for i in range(retries):
+        try:
+            # Try to open request, if successful return ends function
+            return urlopen(*request)
+        except URLError as e:
+            # Continue loop if not successful because of socket error
+            if e.reason.erno == errno.WSAECONNRESET:
+                continue
+            # If not successful for other error raise and end function
+            raise
 
-    # Add dir to var zipfile is saved as
-    f = directory + os.sep + filename
-    r = request + filename
-    try:
-        urlretrieve(r, f)
-        message("HTTP downloaded successfully as:\n" + str(f))
-    except:
-        message("Error downloading from: " + '\n' + str(r))
-        message("Try manually downloading from: " + request)
+
+def api_request(*request):
+    req = retry_urlopen(3, *request)
+    return req.read()
 
 
 def geoQuery(geo, geoType, inSR, fields):
@@ -49,7 +53,7 @@ def geoQuery(geo, geoType, inSR, fields):
             outGeo = "returnGeometry=true"
         else:
             outFields += "{},".format(f)
-    ret = "{}&{}".format(outFields, outGeo)
+    ret = "{}&{}".format(outFields[:-1], outGeo)
     return "query?{}&{}&{}&{}&{}".format(geo, geoType, inSR, spRel, ret)
 
 
@@ -62,6 +66,7 @@ def getServiceInfo(catalog, service):
     # Send request
     return loads(api_request(r))
 
+
 def rasterServiceDict(catalog, service):
     sJSON = getServiceInfo(catalog, service)
     maxImage = "{},{}".format(sJSON['maxImageWidth'], sJSON['maxImageHeight'])
@@ -70,6 +75,7 @@ def rasterServiceDict(catalog, service):
     rasterExtent = "{},{},{},{}".format(e['xmin'],e['ymin'],e['ymax'],e['xmax'])
     #SR = sJSON["spatialReference"]
     return {"maxImage": maxImage, "rasterExtent": rasterExtent}
+
 
 def rasterPointQuery(geo, inSR, serviceDict):
     #geometry=-9705448.14767,3587228.92735
@@ -140,9 +146,27 @@ def MapServerRequest(catalog, service, layer, query):
     return loads(api_request(r))
 
 
-def api_request(request):
-    req = urlopen(request)
-    return req.read()
+def SSURGO_Request():
+    r = "{}{}".format(url, query)
+    return loads(api_request(r))
+
+
+def HTTPS_download(request, directory, filename):
+    """Download HTTP request to filename
+    Param request: HTTP request link ending in "/"
+    Param directory: Directory where downloaded file will be saved
+    Param filename: Name of file for download request and saving
+    """
+
+    # Add dir to var zipfile is saved as
+    f = directory + os.sep + filename
+    r = request + filename
+    try:
+        urlretrieve(r, f)
+        message("HTTP downloaded successfully as:\n" + str(f))
+    except:
+        message("Error downloading from: " + '\n' + str(r))
+        message("Try manually downloading from: " + request)
 
 
 def Check_archive(directory, filename):
@@ -201,6 +225,8 @@ def splitFIPS(FIPS):
 
 
 def getStateName(FIPS):
+    if len(FIPS)>2:
+        FIPS = splitFIPS(FIPS)[0]
     return get_states()[str(FIPS)]
 
 
@@ -260,3 +286,49 @@ def getJSON(fc):
     geoSR = json['spatialReference']
 
     return geo, geoType, geoSR
+
+def getSurvey_date(SSA):
+    """Create SQL query for survey save date (saverest) using areasymbol (SSA).
+    """
+    #SQL can be tested at https://sdmdataaccess.nrcs.usda.gov/Query.aspx
+    where = "WHERE sacatalog.areasymbol = '{}'".format(SSA)
+    sQuery = 'query: "SELECT saverest FROM sacatalog {}"'.format(where)
+    sFormat = 'format: "JSON"'
+    dataQuery = '{}{}, {}{}'.format('{', sQuery, sFormat, '}')
+    # Make request
+    url = "https://sdmdataaccess.nrcs.usda.gov/Tabular/SDMTabularService/post.rest"
+    res = json.loads(api_request(url, dataQuery))
+    # Get Date
+    if len(res)>0:
+        date = res['Table'][0][0].split(" ")[0]
+        # Format Date
+        d = date.split("/")
+        return "{}-{}-{}".format(d[2], d[0].zfill(2), d[1].zfill(2))
+    else:
+        message("No {} for {}".format("survey", SSA))
+
+
+def getCounty_surveys(FIP):
+    """Create SQL query for survey areasymbol (SSA) based on formated FIP.
+    """
+    l = "legend" # Legend table
+    lo = "laoverlap" # Legend Area Overlap Table
+    aSym = "areasymbol" # Area symbol field name used in both tables
+    sQuery = 'query: "SELECT {0}.{1} FROM {0}'.format(l, aSym)
+    sJoin = "INNER JOIN {0} ON {1}.lkey = {0}.lkey AND {0}.{2} = '{3}'".format(lo, l, aSym, FIP)
+    sFormat = 'format: "JSON"'
+    dataQuery = '{}{} {}", {}{}'.format('{', sQuery, sJoin, sFormat, '}')
+    # Make request
+    url = "https://sdmdataaccess.nrcs.usda.gov/Tabular/SDMTabularService/post.rest"
+    res = json.loads(api_request(url, dataQuery))
+    # Get list of SSA
+    if len(res)>0:
+        SSA_list = []
+        for SSA in res['Table']:
+            SSA_list += SSA
+        return SSA_list
+    else:
+        message("No {} for {}".format("SSA", FIP))
+
+
+    
