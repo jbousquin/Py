@@ -122,11 +122,85 @@ def soils(FIPS, directory):
 ##    layer = "0"
 ##    response = utils.MapServerRequest(catalog, service, layer, query)
         
-def landuse():
-    #import default nlcd raster image
-    #https://datagateway.nrcs.usda.gov/GDGOrder.aspx - download by state?
-def NHD():
-    #adapt RBI Tool
+def landuse(FIPS, directory):
+    #download nlcd raster image
+    url = "http://www.landfire.gov/bulk/downloadfile.php?"
+    typ01 = "TYPE=nlcd2011&FNAME="
+    FNAME = "nlcd_2011_landcover_2011_edition_2014_10_10.zip"
+    contig_file = "{}{}".format(typ01, FNAME)
+    file_list = []
+    for FIP in FIPS:
+        state = utils.getStateName(FIP)
+        if state == 'AK':
+            #?TYPE=nlcd2011
+            FNAME = "ak_nlcd_2011_landcover_1_15_15.zip"
+            file_list.append("{}{}".format(typ01, FNAME))
+        elif state == 'HI':
+            utils.message("Download High Resolution HI landcover from NOAA")
+            #file_list.append(FNAME)
+        elif state == 'PR':
+            utlis.message("PR landuse is hard to find... using 2001")
+            typPR = "TYPE=nlcdpr&FNAME="
+            FNAME = "PR_landcover_wimperv_10-28-08_se5.zip"
+            file_list.append("{}{}".format(typPR, FNAME))
+        elif contig_file not in file_list:
+            #import default nlcd raster image
+            file_list.append(contig_file)
+    #Alternative method - download by state
+    #https://datagateway.nrcs.usda.gov/GDGOrder.aspx
+    #Best Method Enviroatlas image service download
+
+    # Do download
+    for filename in file_list:
+        utils.HTTPS_download(url, directory, filename)
+        # Check zip
+        if utils.Check_archive(directory, filename):
+            z = directory + os.sep + filename
+            
+            # Extract desired shp to landuse_file
+            utils.WinZip_unzip(z)
+    #merge rasters?
+
+
+def NHD(poly, directory):
+    # Use service to get VPU
+    #https://services.arcgis.com/cJ9YHowT8TU7DUyn/arcgis/rest/services/
+    #NHDPlus_V2_BoundaryUnit/FeatureServer/0
+    #query?where=&objectIds=&time=&geometry=-9705448.14767%2C3587228.92735&geometryType=esriGeometryPoint&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&returnGeodetic=false&outFields=DrainageID&returnHiddenFields=false&returnGeometry=false&returnCentroid=false&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnDistinctValues=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=html&token=LadFT4-raCdo55z5yM7Q0CLsGjhRXfQCz5Yfk6kc9cm93z1mnppbn-Q0kwnE2miHzz6STI3PbvK4IrVjAe7ds1C8egDxEh-naXhHwLYmV4ii0kyehL7ugNVqnLyJdAZy1wAnNXUy_eN9fBajw15NnQKQThT0zSYUnzd9AfHcEtUCbU-JAIY2pUDBIZ0w5Mk_qFY1ubK_cfqUzxKAUYSmfUwrrAW3yRH8BznPgZmRrbtVPq41rWm-VRwSk2_yR8Nz
+    catalog = "services.arcgis.com/cJ9YHowT8TU7DUyn"
+    service = "NHDPlus_V2_BoundaryUnit"
+    typ = "FeatureServer" #may add this to a map to make it more standardized
+    layer = "0"
+    
+    envelope = utils.getBoundingBox(poly)
+    inSR = utils.getSR(poly)
+    fields = ["DrainageID", "UnitID"]
+    query = utils.geoQuery(envelope, "esriGeometryEnvelope", inSR, fields)
+
+    #t is my token, the service will be made open later    
+    res = utils.MapServerRequest(catalog, service, layer, query, typ, t)
+    features = res['features']
+
+    # Use results to get VPU code
+    ID_list = []
+    d_list = []
+    for feature in features:
+        ID_list += [feature['attributes']['UnitID']]
+        d_list += [feature['attributes']['DrainageID']]
+
+    # Download Data
+    requests = utils.getNHDrequest(ID_list, d_list)
+    for request in requests:
+        for f in request[1]:
+            utils.HTTPS_download(request[0], directory, f)
+            #zip files will not pass Check_archive because it is .7z
+            z = directory + os.sep + f
+            #update using 7z package if available
+            #need to do some kind of check
+            #after a user closes the error message it says "Successfully extracted files"
+            utils.WinZip_unzip(z)
+
+
 def roads(FIPS, directory):
     for FIP in FIPS:
         # Download
@@ -139,10 +213,13 @@ def roads(FIPS, directory):
         z = directory + os.sep + filename
         utils.WinZip_unzip(z)
 
+
 def main(poly, outDIR):
     county, FIPS = utils.polyFIPS(poly)
     soils(FIPS, outDIR)
     roads(FIPS, outDIR)
+    landuse(FIPS, outDIR)
+    NHD(poly, outDIR)
 
 #try:
 #    main()
