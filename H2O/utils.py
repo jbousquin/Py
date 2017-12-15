@@ -6,7 +6,9 @@ bousquin.justin@epa.gov
 """
 
 import os
+import urllib
 from urllib import urlretrieve, urlopen
+#, URLError
 from shutil import copyfile
 from json import loads, load
 from math import ceil
@@ -19,6 +21,15 @@ def message(string):
     print(string)
 
 
+def unique_values(table, field):
+    """Unique Values
+    Purpose: returns a sorted list of unique values
+    Notes: used to find unique field values in table column
+    """
+    with arcpy.da.SearchCursor(table, [field]) as cursor:
+        return sorted({row[0] for row in cursor if row[0]})
+
+
 def retry_urlopen(retries, *request):
     """Tries urlopen(request) for specified number of retries if the URLError
     was errno.WASCONNRESET
@@ -27,7 +38,7 @@ def retry_urlopen(retries, *request):
         try:
             # Try to open request, if successful return ends function
             return urlopen(*request)
-        except URLError as e:
+        except urllib.error.URLError as e:
             # Continue loop if not successful because of socket error
             if e.reason.erno == errno.WSAECONNRESET:
                 continue
@@ -201,6 +212,66 @@ def WinZip_unzip(z):
         message("Unable to extact file:\n {}".format(z))
 
 
+def copy_shp(inShp, outShp):
+    #strip extensions
+    inF = strip_ext(inShp)
+    outF = strip_ext(outShp)
+    # Copy all shapefile extensions
+    shp_component_list = [".shp", ".shx", ".dbf", ".prj", ".shp.xml"]
+    for ext in shp_component_list:
+        if os.path.isfile(inF + ext):# if file exists
+            copyfile(inF + ext, outF + ext)# copy it
+        else: # otherwise warn the user
+            message("Could not find {}".format(inF + ext))
+
+
+def append_shp(inShp, outShp):
+    if os.path.isfile(outShp):
+        try:
+            arcpy.Append_management(inShp, outShp, "NO_TEST")
+        except:
+            message("Could not perform append.")
+    else:
+        message("Specified file does not exist!")
+
+
+def strip_ext(f):
+    return os.path.splitext(f)[0]
+
+def shpExists(f):
+    return os.path.isfile(strip_ext(f) + ".shp")
+
+
+def extract_shp_to(z, shp, out_file, save = False): 
+    # Add directory to shp
+    z_dir = os.path.dirname(z)
+    z_shp = z_dir + os.sep + shp
+
+    # Unzip
+    #later update - extract only the file of interest
+    WinZip_unzip(z)
+    # Check for shp
+    if shpExists(z_shp):
+        try:
+            # Move shp to out_file
+            if shpExists(out_file):
+                # Append shapefile
+                append_shp(z_shp, out_file)
+            else:
+                # Create new national file
+                copy_shp(z_shp, out_file)
+        except:
+            message("Error unpacking {} to {}".format(z_shp, out_file))
+        if save is False:
+            # Delete unzipped files
+            for f in archive_list(z):
+                f_name = z_dir + os.sep + f
+                #DOES NOT REMOVE FOLDERS
+                os.remove(f_name)
+    else:
+        message("Shapefile not found: \n{}".format(z_shp))
+   
+
 def polyFIPS(poly):
     # Get extent
     envelope = getEnvelope(poly)
@@ -262,6 +333,7 @@ def getBoundingBox(fc):
 
     return "{},{},{},{}".format(xmin, ymin, xmax, ymax)
 
+
 def getEnvelope(fc):
     desc = arcpy.Describe(fc)
     xmin = desc.extent.XMin
@@ -287,6 +359,27 @@ def getJSON(fc):
 
     return geo, geoType, geoSR
 
+
+def getMUKEY_var(mukey, col, table = "Component"):
+    """SQl query a value from a column in a table based on a mukey"""
+    where = "WHERE {}.mukey = '{}'".format(table, mukey)
+    sQuery = 'query: "SELECT {} FROM {} {}"'.format(col, table, where)
+    sFormat = 'format: "JSON"'
+    dataQuery = '{}{}, {}{}'.format('{', sQuery, sFormat, '}')
+    # Make request
+    url = "https://sdmdataaccess.nrcs.usda.gov/Tabular/SDMTabularService/post.rest"
+    res = loads(api_request(url, dataQuery))
+    
+    # Get value
+    if len(res)>0:
+        v_list = []
+        for val in res['Table']:
+            v_list += val
+        return v_list
+    else:
+        message("No {} for {}".format(col, mukey))
+
+                
 def getSurvey_date(SSA):
     """Create SQL query for survey save date (saverest) using areasymbol (SSA).
     """
@@ -297,7 +390,7 @@ def getSurvey_date(SSA):
     dataQuery = '{}{}, {}{}'.format('{', sQuery, sFormat, '}')
     # Make request
     url = "https://sdmdataaccess.nrcs.usda.gov/Tabular/SDMTabularService/post.rest"
-    res = json.loads(api_request(url, dataQuery))
+    res = loads(api_request(url, dataQuery))
     # Get Date
     if len(res)>0:
         date = res['Table'][0][0].split(" ")[0]
@@ -320,7 +413,7 @@ def getCounty_surveys(FIP):
     dataQuery = '{}{} {}", {}{}'.format('{', sQuery, sJoin, sFormat, '}')
     # Make request
     url = "https://sdmdataaccess.nrcs.usda.gov/Tabular/SDMTabularService/post.rest"
-    res = json.loads(api_request(url, dataQuery))
+    res = loads(api_request(url, dataQuery))
     # Get list of SSA
     if len(res)>0:
         SSA_list = []
