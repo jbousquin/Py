@@ -144,7 +144,7 @@ def queryPoints(catalog, service, AOI, cellx, celly):
 
     # Snap/re-project to align with original?
 
-def MapServerRequest(catalog, service, layer, query):
+def MapServerRequest(catalog, service, layer, query, typ = "MapServer", token = ""):
     #catalog = "tigerweb.geo.census.gov"
     #service = "TIGERweb/tigerWMS_Census2010"
     #layer = 98
@@ -152,8 +152,8 @@ def MapServerRequest(catalog, service, layer, query):
         layer = ""
     else:
         layer = "{}/".format(layer)
-    que = "{}&f=json".format(query)
-    r = "https://{}/arcgis/rest/services/{}/MapServer/{}{}".format(catalog, service, layer, que)
+    que = "{}&f=json{}".format(query, token)
+    r = "https://{}/arcgis/rest/services/{}/{}/{}{}".format(catalog, service, typ, layer, que)
     return loads(api_request(r))
 
 
@@ -321,7 +321,10 @@ def get_states():
 def getSR(fc):
     desc = arcpy.Describe(fc)
     #PCSCode    #GCSCode
-    return desc.spatialReference.factoryCode
+    code = desc.spatialReference.factoryCode
+    if code == 0: # if 0 -> 4326
+        code = 4326
+    return code
 
 
 def getBoundingBox(fc):
@@ -423,5 +426,69 @@ def getCounty_surveys(FIP):
     else:
         message("No {} for {}".format("SSA", FIP))
 
-
     
+def getNHDrequest(ID_list, d_list):
+    # http://www.horizon-systems.com/NHDPlusData/NHDPlusV21/Data/NHDPlus
+    sub_link = "/{0}Data/{0}V21/Data/{0}".format("NHDPlus")
+    NHD_http = "http://www.horizon-systems.com" + sub_link
+
+    # Component name is the name of the NHDPlusV2 component file
+    f_comp = "NHDPlusCatchment"
+    f2_comp = "NHDPlusAttributes"
+    f3_comp = "NHDSnapshot"
+    f4_comp = "NHDPlusBurnComponents"
+
+    #Replace with query from VPU that include lookup
+    #Version dictionary, [f_comp, f2_comp, f3_comp, f4_comp]
+    vv_dict = {'10U': ["02", "09", "01", "01"],
+           '13': ["02", "05", "01", "01"],
+           '17': ["02", "08", "01", "01"],
+           "06": ["05", "09", "01", "01"],
+           "20": ["01", "02", "01", "01"],
+           "21": ["01", "02", "01", "01"],
+           "22AS": ["01", "02", "01", "01"],
+           "22GU": ["01", "02", "01", "01"],
+           "22MP": ["01", "02", "01", "01"],
+           "03N": ["01", "05", "01", "01"],
+           "03S": ["01", "06", "06", "02"],
+           "03W": ["01", "06", "04", "02"],
+           "16": ["01", "05", "01", "01"],
+           "02": ["01", "06", "01", "01"],
+           "09": ["01", "06", "01", "01"],
+           "11": ["01", "06", "01", "01"],
+           "18": ["01", "06", "01", "01"],
+           "01": ["01", "07", "01", "01"],
+           "08": ["01", "07", "01", "01"],
+           "12": ["01", "07", "01", "01"],
+           "05": ["01", "08", "01", "01"],
+           "15": ["01", "08", "01", "01"],
+           "07": ["01", "09", "01", "01"],
+           "14": ["01", "09", "01", "01"],
+           "10L": ["01", "11", "01", "01"],
+           "04": ["01", "12", "01", "01"]
+           }
+    rows = []
+    for i, DA in enumerate(d_list):
+        ID = ID_list[i]
+
+        # Set versions
+        f_vv = vv_dict[ID][0]
+        f2_vv = vv_dict[ID][1]
+        f3_vv = vv_dict[ID][2]
+        f4_vv = vv_dict[ID][3]
+
+        # Set http zipfile is requested from
+        if DA in ["SA", "MS", "CO", "PI"]:  # regions with sub-regions
+            request = NHD_http + DA + "/" + "NHDPlus" + ID + "/"
+        else:
+            request = NHD_http + DA + "/"
+
+        # Assign catchment filenames
+        f = "NHDPlusV21_{}_{}_{}_{}{}".format(DA, ID, f_comp, f_vv, ".7z")
+        # Assign attribute filenames
+        f2 = "NHDPlusV21_{}_{}_{}_{}{}".format(DA, ID, f2_comp, f2_vv, ".7z")
+        f3 = "NHDPlusV21_{}_{}_{}_{}{}".format(DA, ID, f3_comp, f3_vv, ".7z")
+        f4 = "NHDPlusV21_{}_{}_{}_{}{}".format(DA, ID, f4_comp, f4_vv, ".7z")
+        row = (request, [f, f2, f3, f4])
+        rows.append(row)
+    return rows
